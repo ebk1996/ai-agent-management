@@ -1,0 +1,40 @@
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?Set ADMIN_API_TOKEN in .env}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/agentops}
+      HARDWARE_AGENT_URL: http://edge-agent:8081/status
+    depends_on:
+      mongo:
+        condition: service_healthy
+      edge-agent:
+        condition: service_healthy
+    restart: unless-stopped
+
+  edge-agent:
+    build: ./services/edge-agent
+    environment:
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-30}
+      HARDWARE_STATUS_URL: ${HARDWARE_STATUS_URL:-}
+      HARDWARE_BEARER_TOKEN: ${HARDWARE_BEARER_TOKEN:-}
+    expose:
+      - "8081"
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:8
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

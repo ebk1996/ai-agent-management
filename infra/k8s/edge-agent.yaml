@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-edge
+  labels:
+    app: agent-edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-edge
+  template:
+    metadata:
+      labels:
+        app: agent-edge
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: edge-agent
+          image: ai-agent-edge:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          env:
+            - name: POLL_INTERVAL_SECONDS
+              value: "30"
+            - name: HARDWARE_STATUS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: agent-edge-config
+                  key: hardware-status-url
+                  optional: true
+            - name: HARDWARE_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-edge-secret
+                  key: hardware-bearer-token
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-edge
+spec:
+  type: ClusterIP
+  selector:
+    app: agent-edge
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-edge-config
+data:
+  hardware-status-url: ""
